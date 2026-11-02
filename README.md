@@ -17,7 +17,7 @@
 
 Ask an AI agent how to undo a git commit and you may get 1,080 characters: the command, three variants, two caveats and an offer to help. With no-overthink, the same model gave the command and two sentences.
 
-In a small benchmark on Claude Opus 5.5 and Claude Fable 5.1, the rules cut output tokens by 41–57% and time per task by 30–53%. No task that passed without the rules failed with them. [How it was measured](#measurements), including what wasn't.
+In a small benchmark on Claude Opus 5.5 and Claude Fable 5.1, the rules cut output tokens by 41–57% and time per task by 30–53%. On GPT-5.6 Sol in Kiro CLI, one paired run cut time by 23%, tool calls by 31% and Kiro credits by 8%. No task that passed without the rules failed with them. [How it was measured](#historical-claude-measurements), including what wasn't.
 
 ## Install in one step
 
@@ -111,7 +111,7 @@ Each rule file opens with a gate that names one model family. The matching model
 | Fable 5.1, default | 750 → 354 (−53%) | 12.3 → 8.0 s (−35%) | 11/11 → 11/11 |
 | Opus 5.5, max | 5,001 → 2,156 (−57%) | 48.3 → 22.6 s (−53%) | 6/7 → 6/7 |
 
-8 small tasks, 1–2 runs each, measured with an earlier single-file version of the rules. The current stricter files and the GPT rules haven't been measured yet. Full tables and limits are in [Measurements](#measurements).
+8 small tasks, 1–2 runs each, measured with an earlier single-file version of the rules; the current stricter Claude files haven't been re-measured. GPT-5.6 Sol in Kiro CLI passed 8/8 both ways, with time −23%, tool calls −31% and credits −8%, from one run per task ([details](#gpt-56-sol-benchmark)). Full Claude tables and limits are in [Historical Claude measurements](#historical-claude-measurements).
 
 ## FAQ
 
@@ -227,7 +227,36 @@ A workspace-level `chat.modelDefaults` in `.kiro/settings/cli.json` overrides th
 
 On the same 7 tasks without the rules, Opus 5.5 at `max` effort produced 5,001 output tokens and took 48.3 s per task. At its default effort it produced 685 tokens and took 8.5 s.
 
-## Measurements
+## GPT-5.6 Sol benchmark
+
+Run on 2 November 2026 with Kiro CLI 2.37.1, `tech-cofounder`, `gpt-5.6-sol`, `medium` effort, and strict rule version `11380c9fa8cf`. Each arm ran once over all eight synthetic tasks. The complete run used 32.90 Kiro credits.
+
+|  | Without | With strict rule | Change |
+| --- | ---: | ---: | ---: |
+| Tasks passed | 8/8 | 8/8 | — |
+| Kiro credits per run | 2.137 | 1.976 | -8% |
+| Time per run | 22.9 s | 17.6 s | -23% |
+| Tool calls per run | 9.0 | 6.3 | -31% |
+| Final reply length | 1,228 chars | 724 chars | -41% |
+
+<details><summary>Per-task results</summary>
+
+| Task | Without | With strict rule |
+| --- | ---: | ---: |
+| qa-git | 0.43 credits · 6.8 s · pass | 0.59 credits · 6.8 s · pass |
+| qa-float | 0.66 credits · 11.1 s · pass | 0.68 credits · 7.7 s · pass |
+| explain | 0.60 credits · 9.7 s · pass | 0.85 credits · 10.2 s · pass |
+| fix-test | 4.05 credits · 36.9 s · pass | 3.47 credits · 25.9 s · pass |
+| crash | 3.40 credits · 35.5 s · pass | 2.76 credits · 25.8 s · pass |
+| add-fn | 2.76 credits · 30.5 s · pass | 2.18 credits · 20.3 s · pass |
+| rename | 2.34 credits · 25.3 s · pass | 2.64 credits · 22.8 s · pass |
+| lru | 2.88 credits · 27.4 s · pass | 2.64 credits · 21.5 s · pass |
+
+</details>
+
+The rule helped most on tool-heavy code tasks. It used slightly more credits on all three question tasks and on `rename`, so the aggregate savings should be treated as directional. This is one repetition per task, not a stable estimate across workloads. Raw records are in [`bench/results/2026-11-02-kiro-gpt-5.6-sol-medium.jsonl`](bench/results/2026-11-02-kiro-gpt-5.6-sol-medium.jsonl).
+
+## Historical Claude measurements
 
 ### Method
 
@@ -237,7 +266,7 @@ On the same 7 tasks without the rules, Opus 5.5 at `max` effort produced 5,001 o
   - *With rules*: the matching Claude model file under [`rules/`](rules) added to the first user message. Installed tools load every file, but only the matching model gate applies.
   - *With rules + /quick*: also the skill text, at effort `low`. This matches `/quick` in Claude Code.
 - **Tasks:** 3 questions (undo a git commit, compare floats, explain a retry helper) and 5 code changes (fix a failing test, fix a crash, add a function, rename across files, fix an LRU cache). Every run starts from a fresh copy of its fixture in [`bench/fixtures`](bench/fixtures). A run passes when its check in [`bench/tasks.mjs`](bench/tasks.mjs) passes: the original tests, a hidden check, or a pattern in the answer.
-- **When:** 2 November 2026, models `claude-opus-5-5` and `claude-fable-5-1`, historical shared-rules version `541dad574ed8`. Raw runs are in [`bench/results`](bench/results). The rules were later split by model family and the Claude files made stricter; none of the current files has been re-measured. Future runs record the hash of the rule selected for each model.
+- **When:** 2 November 2026, models `claude-opus-5-5` and `claude-fable-5-1`, historical shared-rules version `541dad574ed8`. Raw runs are in [`bench/results`](bench/results). The rules were later split by model family and the Claude files made stricter; none of the current Claude files has been re-measured. Future runs record the hash of the rule selected for each model.
 
 ### Default effort
 
