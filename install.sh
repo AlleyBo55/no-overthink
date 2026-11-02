@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # no-overthink: installs separate, self-gated model rules and a /quick skill for
-# Kiro (IDE, CLI, Kiro Crew), Claude Code, Codex and Cursor.
+# Kiro (IDE, CLI, Kiro Crew), Claude Code, Codex, Cursor and Antigravity.
 #
 #   ./install.sh                         install for every tool found on this machine
-#   ./install.sh --only kiro,claude      install for specific tools (kiro, claude, codex, cursor)
+#   ./install.sh --only kiro,claude      install for specific tools (kiro, claude, codex, cursor, antigravity)
 #   ./install.sh --agent tech-cofounder  also add the rules to these Kiro CLI custom agents
 #   ./install.sh --uninstall             remove everything this script added
 #   ./install.sh --dry-run               show what would change
@@ -16,7 +16,8 @@ TAG='<!-- no-overthink -->'
 BLOCK_START='<!-- no-overthink:start -->'
 BLOCK_END='<!-- no-overthink:end -->'
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
-TOOLS="kiro claude codex cursor"
+TOOLS="kiro claude codex cursor antigravity"
+AGY_DIR="$HOME/.gemini/config"
 RULE_FILES="anthropic-claude-opus-5.5.md anthropic-claude-fable-5.1.md openai-gpt-6.md openai-gpt-5.6.md openai-gpt-5.5.md"
 LEGACY_KIRO_RULE="$HOME/.kiro/steering/no-overthink.md"
 LEGACY_CURSOR_RULE="$HOME/.cursor/rules/no-overthink.mdc"
@@ -252,8 +253,33 @@ if selected cursor "$HOME/.cursor"; then
   fi
 fi
 
+# Antigravity (App, IDE, CLI) reads modular global rules from ~/.gemini/config/rules/*.md
+# and global skills from ~/.gemini/config/skills/. Detect it by its own folders, not ~/.gemini,
+# which Gemini CLI also uses.
+agy_seen="$HOME/.gemini/antigravity"
+for d in "$HOME/.gemini/antigravity" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli"; do
+  if [ -d "$d" ]; then agy_seen="$d"; break; fi
+done
+if selected antigravity "$agy_seen"; then
+  count=$((count + 1))
+  say "Antigravity (App, IDE, CLI)"
+  if [ "$action" = install ]; then
+    for rule_file in $RULE_FILES; do
+      stem="${rule_file%.md}"
+      rule="$(fetch "rules/$rule_file")"
+      put "$AGY_DIR/rules/no-overthink-$rule_file" "$(printf -- '---\ntrigger: always_on\ndescription: Model-specific no-overthink rule for %s\n---\n%s\n\n%s' "$stem" "$TAG" "$rule")"
+    done
+    put "$AGY_DIR/skills/quick/SKILL.md" "$skill"
+  else
+    for rule_file in $RULE_FILES; do
+      unput "$AGY_DIR/rules/no-overthink-$rule_file"
+    done
+    unput "$AGY_DIR/skills/quick/SKILL.md"
+  fi
+fi
+
 if [ "$count" = 0 ]; then
-  say "No supported tool found (~/.kiro, ~/.claude, ~/.codex, ~/.cursor). Use --only to pick tools anyway."
+  say "No supported tool found (~/.kiro, ~/.claude, ~/.codex, ~/.cursor, ~/.gemini/antigravity). Use --only to pick tools anyway."
   exit 1
 fi
 [ "$action" = install ] && say "Done. Start a new session in each tool to load the rules." || say "Done."
