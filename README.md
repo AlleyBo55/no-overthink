@@ -77,7 +77,7 @@ The rule steers visible responses, tool use and task scope. It cannot disable a 
 
 ## Precedence
 
-The first line gives no-overthink priority over other user-controlled rules at the same instruction level. Each host's instruction hierarchy still applies: system, developer and safety policies outrank user or custom instructions. At the same level, the stricter instruction wins for destructive actions, data loss, security, secrets and money.
+The first line tells the model that no-overthink overrides every other instruction, rule, steering file and style guide, with one exception: for destructive actions, data loss, security, secrets and money, the stricter instruction wins. Each host's instruction hierarchy still applies: system, developer and safety policies outrank user or custom instructions, so the override works among the rules you control.
 
 To avoid fighting rule sets you already have, the rules stay out of two areas those usually own: they don't say when to add tests, and they don't say which checks to run, only to run each one once. A team guardrail that says "run the build before reporting done" or a testing policy that says "add a few tests for money and permissions logic" still applies in full.
 
@@ -105,7 +105,7 @@ On the same 7 tasks without the rules, Opus 5.5 at `max` effort produced 5,001 o
   - *With rules*: [`rules/no-overthink.md`](rules/no-overthink.md) added to the first user message. Claude Code and Kiro add global instructions the same way.
   - *With rules + /quick*: also the skill text, at effort `low`. This matches `/quick` in Claude Code.
 - **Tasks:** 3 questions (undo a git commit, compare floats, explain a retry helper) and 5 code changes (fix a failing test, fix a crash, add a function, rename across files, fix an LRU cache). Every run starts from a fresh copy of its fixture in [`bench/fixtures`](bench/fixtures). A run passes when its check in [`bench/tasks.mjs`](bench/tasks.mjs) passes: the original tests, a hidden check, or a pattern in the answer.
-- **When:** 2 November 2026, models `claude-opus-5-5` and `claude-fable-5-1`, rules version `541dad574ed8`. Raw runs are in [`bench/results`](bench/results). The current rules (`55577f64bb34`) add the precedence line, drop the sentence on adding tests, and reword two bullets; these edits haven't been re-measured.
+- **When:** 2 November 2026, models `claude-opus-5-5` and `claude-fable-5-1`, rules version `541dad574ed8`. Raw runs are in [`bench/results`](bench/results). The current rules (`9a07e38a94b0`) add the override line, use firmer wording throughout, and drop the sentence on adding tests; these edits haven't been re-measured.
 
 ### Default effort
 
