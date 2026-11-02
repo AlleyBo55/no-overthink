@@ -62,18 +62,32 @@ Checked with Kiro CLI 2.37.1 and Kiro Crew 0.12.0-rc.4:
 
 The rules themselves are in [`rules/no-overthink.md`](rules/no-overthink.md): think only when it helps, take the first approach that works, read only what the task needs, batch tool calls, change only what was asked, verify once, and lead the reply with the answer.
 
+## GPT and OpenAI
+
+The core rule is plain Markdown and does not depend on a particular GPT model ID. The maintained compatibility range is the current stable GPT catalog plus the two preceding stable releases, including their available flagship, chat, reasoning, mini and nano variants when the host supports persistent instructions.
+
+| Surface | Setup |
+| --- | --- |
+| ChatGPT | Paste [`rules/no-overthink.md`](rules/no-overthink.md) into [Custom Instructions](https://help.openai.com/en/articles/8096356-chatgpt-custom-instructions-faq) |
+| Codex | Run `./install.sh --only codex`; Codex loads the marked block from `~/.codex/AGENTS.md` |
+| OpenAI Responses API | Pass the contents of [`rules/no-overthink.md`](rules/no-overthink.md) through the request's `instructions` field |
+| Other GPT hosts | Add the rule through the host's persistent system, developer or custom-instruction setting |
+
+The rule steers visible responses, tool use and task scope. It cannot disable a model's private reasoning. When the API model supports it, use a lower [`reasoning.effort`](https://developers.openai.com/api/docs/guides/reasoning?api-mode=responses) for a harder limit on reasoning cost and latency.
+
 ## Precedence
 
-The first line of the rules says they come before other instructions. When another instruction conflicts, the model follows no-overthink, with one exception: on safety (destructive actions, data loss, security, secrets, money) the stricter instruction wins. Since the precedence is in the text, it holds in every tool and doesn't depend on where the file lands in the prompt.
+The first line gives no-overthink priority over other user-controlled rules at the same instruction level. Each host's instruction hierarchy still applies: system, developer and safety policies outrank user or custom instructions. At the same level, the stricter instruction wins for destructive actions, data loss, security, secrets and money.
 
 To avoid fighting rule sets you already have, the rules stay out of two areas those usually own: they don't say when to add tests, and they don't say which checks to run, only to run each one once. A team guardrail that says "run the build before reporting done" or a testing policy that says "add a few tests for money and permissions logic" still applies in full.
 
 ## Lower effort as well
 
-The rules change how the model works. The effort level sets how much it thinks, and Anthropic recommends lowering effort before using prompts to cut thinking ([Steering thinking](https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost)). Default effort is `medium` on Opus 5.5 and `high` on Fable 5.1.
+The rules change visible behavior. The effort setting controls how much private reasoning a model may use. OpenAI and Anthropic expose model-dependent effort controls; lower effort favors speed and cost, while higher effort remains useful for difficult work. Default effort is `medium` on Opus 5.5 and `high` on Fable 5.1.
 
 | Tool | Lower effort |
 | --- | --- |
+| OpenAI Responses API | Set `reasoning: {"effort":"low"}` when the selected model supports it; accepted values are model-dependent ([docs](https://developers.openai.com/api/docs/guides/reasoning?api-mode=responses)) |
 | Claude Code | `/effort medium` (saved per model), or `claude --effort low` for one session ([docs](https://code.claude.com/docs/en/model-config)) |
 | Kiro CLI, Kiro Crew | `kiro-cli settings chat.modelDefaults '{"claude-opus-5.5":{"output_config":{"effort":"medium"}}}'`, or `kiro-cli chat --effort low` for one session |
 
@@ -210,9 +224,10 @@ The agent runs code it writes on your machine, inside a temp copy of each fixtur
 
 ## Sources
 
+- OpenAI, [model catalog](https://developers.openai.com/api/docs/models) for the rolling GPT compatibility range, [reasoning models](https://developers.openai.com/api/docs/guides/reasoning?api-mode=responses) for model-dependent effort controls, and [ChatGPT Custom Instructions](https://help.openai.com/en/articles/8096356-chatgpt-custom-instructions-faq) for persistent ChatGPT setup.
 - Anthropic, [Steering thinking](https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost): effort is the main control for thinking, and system-prompt guidance can lower how often the model thinks.
 - Anthropic, [Prompting Claude Opus 5.5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5) and [Prompting Claude Fable 5.1](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1): the "answer directly without deliberating" wording, treating earlier answers as settled, batching independent tool calls, targeted edits instead of rewrites, and keeping changes and tests to what the task asks.
 - Claude Code docs: [model configuration](https://code.claude.com/docs/en/model-config) for effort levels, and [skills](https://code.claude.com/docs/en/skills) for the `effort` and `disable-model-invocation` fields.
-- Codex docs: [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) for `~/.codex/AGENTS.md`, and [skills](https://learn.chatgpt.com/docs/build-skills) for `~/.agents/skills`.
+- Codex docs: [AGENTS.md](https://developers.openai.com/codex/guides/agents-md) for `~/.codex/AGENTS.md`, and [skills](https://learn.chatgpt.com/docs/build-skills) for `~/.agents/skills`.
 - Cursor docs: [rules](https://cursor.com/help/customization/rules) for user rule files in `~/.cursor/rules`.
 - Kiro Crew loading `~/.kiro/steering` was checked in the installed `kirocrew` 0.12.0-rc.4 package.
