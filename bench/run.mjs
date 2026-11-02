@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Measures what rules/no-overthink.md changes. Each task runs in a small coding-agent loop
+// Measures the model-specific Claude rules. Each task runs in a small coding-agent loop
 // (list/read/write/edit files, bash) against the Anthropic Messages API, once per arm:
 //   without  no rules, model's default effort
-//   with     rules injected the way Claude Code and Kiro inject global instructions
+//   with     the matching model rule injected the way coding tools inject persistent instructions
 //   quick    rules + the /quick skill text + effort "low" (what /quick does in Claude Code)
 // One JSON line per run is appended to the output file. Summarize with report.mjs.
 //
@@ -23,9 +23,18 @@ import { parseArgs } from 'node:util';
 import { tasks } from './tasks.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RULES = (await readFile(path.join(HERE, '../rules/no-overthink.md'), 'utf8')).trim();
+const RULE_FILE_BY_MODEL = {
+  'claude-opus-5-5': 'anthropic-claude-opus-5.5.md',
+  'claude-fable-5-1': 'anthropic-claude-fable-5.1.md',
+};
+const RULE_CACHE = new Map();
+async function rulesFor(model) {
+  const file = RULE_FILE_BY_MODEL[model];
+  if (!file) throw new Error(`No model-specific rule for "${model}"`);
+  if (!RULE_CACHE.has(file)) RULE_CACHE.set(file, (await readFile(path.join(HERE, '../rules', file), 'utf8')).trim());
+  return RULE_CACHE.get(file);
+}
 const QUICK = (await readFile(path.join(HERE, '../skills/quick/SKILL.md'), 'utf8')).split('<!-- no-overthink -->')[1].trim();
-const RULES_SHA = createHash('sha256').update(RULES).digest('hex').slice(0, 12);
 
 const ARMS = {
   without: { rules: false, quick: false, effort: undefined },
@@ -196,15 +205,15 @@ async function runTool(name, input, dir) {
   }
 }
 
-function firstMessage(task, arm) {
+function firstMessage(task, arm, rules) {
   let text = task.prompt;
   if (arm.quick) text = `${QUICK}\n\n${text}`;
-  if (arm.rules) text = `<system-reminder>\nThe user's global instructions for all projects:\n\n${RULES}\n</system-reminder>\n\n${text}`;
+  if (arm.rules) text = `<system-reminder>\nThe model-specific instructions for this model:\n\n${rules}\n</system-reminder>\n\n${text}`;
   return text;
 }
 
-async function runAgent(model, arm, task, dir) {
-  const messages = [{ role: 'user', content: firstMessage(task, arm) }];
+async function runAgent(model, arm, task, dir, rules) {
+  const messages = [{ role: 'user', content: firstMessage(task, arm, rules) }];
   const m = { turns: 0, toolCalls: 0, input: 0, output: 0, thinking: 0, cacheRead: 0, cacheWrite: 0, apiMs: 0, waitedMs: 0 };
   const trace = [];
   const stops = [];
@@ -252,12 +261,14 @@ async function runJob({ model, task, armName, rep }) {
   const dir = await mkdtemp(path.join(tmpdir(), `nobench-${task.id}-`));
   const checkDir = await mkdtemp(path.join(tmpdir(), 'nobench-check-'));
   const effort = arm.effort ?? opts.effort ?? 'default';
-  const record = { model, arm: armName, effort, task: task.id, kind: task.kind, rep, rules_sha: RULES_SHA, at: new Date().toISOString() };
+  const rules = await rulesFor(model);
+  const rulesSha = createHash('sha256').update(rules).digest('hex').slice(0, 12);
+  const record = { model, arm: armName, effort, task: task.id, kind: task.kind, rep, rules_sha: rulesSha, at: new Date().toISOString() };
   try {
     const fixture = path.join(HERE, 'fixtures', task.fixture);
     await cp(fixture, dir, { recursive: true });
     const started = performance.now();
-    const { m, text, trace, stops } = await runAgent(model, arm, task, dir);
+    const { m, text, trace, stops } = await runAgent(model, arm, task, dir, rules);
     const wallMs = performance.now() - started - m.waitedMs;
     const pristine = async (testFile) => {
       const copy = path.join(dir, path.dirname(testFile), `__pristine__${path.basename(testFile)}`);
@@ -315,5 +326,5 @@ const worker = async () => {
     console.log(`[${done}/${jobs.length}] ${r.model} ${r.arm}@${r.effort} ${r.task} #${r.rep} ${status}`);
   }
 };
-console.log(`${jobs.length} runs -> ${path.relative(process.cwd(), out)} (rules ${RULES_SHA})`);
+console.log(`${jobs.length} runs -> ${path.relative(process.cwd(), out)} (model-specific rules)`);
 await Promise.all(Array.from({ length: Math.min(Number(opts.concurrency), jobs.length) }, worker));

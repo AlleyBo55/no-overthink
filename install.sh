@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# no-overthink: installs always-on "don't overthink" rules and a /quick skill for
+# no-overthink: installs separate, self-gated model rules and a /quick skill for
 # Kiro (IDE, CLI, Kiro Crew), Claude Code, Codex and Cursor.
 #
 #   ./install.sh                         install for every tool found on this machine
@@ -17,6 +17,9 @@ BLOCK_START='<!-- no-overthink:start -->'
 BLOCK_END='<!-- no-overthink:end -->'
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
 TOOLS="kiro claude codex cursor"
+RULE_FILES="anthropic-claude-opus-5.5.md anthropic-claude-fable-5.1.md openai-gpt-6.md openai-gpt-5.6.md openai-gpt-5.5.md"
+LEGACY_KIRO_RULE="$HOME/.kiro/steering/no-overthink.md"
+LEGACY_CURSOR_RULE="$HOME/.cursor/rules/no-overthink.mdc"
 
 action=install
 only=""
@@ -52,7 +55,7 @@ fi
 
 # Read sources from this checkout, or download them when piped from curl.
 src_dir=""
-if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(dirname "${BASH_SOURCE[0]}")/rules/no-overthink.md" ]; then
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(dirname "${BASH_SOURCE[0]}")/rules/anthropic-claude-opus-5.5.md" ]; then
   src_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 fetch() {
@@ -120,7 +123,8 @@ unput_block() {
 
 # Kiro CLI custom agents skip ~/.kiro/steering in workspaces that set
 # chat.disableInheritingDefaultResources (Kiro Crew sets it), so --agent lists our files in the agent.
-AGENT_ENTRIES='["file://~/.kiro/steering/no-overthink.md","skill://~/.kiro/skills/quick/SKILL.md"]'
+AGENT_ENTRIES='["file://~/.kiro/steering/no-overthink-anthropic-claude-opus-5.5.md","file://~/.kiro/steering/no-overthink-anthropic-claude-fable-5.1.md","file://~/.kiro/steering/no-overthink-openai-gpt-6.md","file://~/.kiro/steering/no-overthink-openai-gpt-5.6.md","file://~/.kiro/steering/no-overthink-openai-gpt-5.5.md","skill://~/.kiro/skills/quick/SKILL.md"]'
+LEGACY_AGENT_ENTRIES='["file://~/.kiro/steering/no-overthink.md"]'
 patch_agent() {
   local file="$HOME/.kiro/agents/$1.json" filter updated
   if [ ! -f "$file" ]; then
@@ -132,11 +136,11 @@ patch_agent() {
     exit 1
   fi
   if [ "$action" = install ]; then
-    filter='.resources = ((.resources // []) - $entries) + $entries'
+    filter='.resources = (((.resources // []) - $legacy - $entries) + $entries)'
   else
-    filter='.resources = ((.resources // []) - $entries) | if .resources == [] then del(.resources) else . end'
+    filter='.resources = ((.resources // []) - $legacy - $entries) | if .resources == [] then del(.resources) else . end'
   fi
-  updated="$(jq --argjson entries "$AGENT_ENTRIES" "$filter" "$file")"
+  updated="$(jq --argjson entries "$AGENT_ENTRIES" --argjson legacy "$LEGACY_AGENT_ENTRIES" "$filter" "$file")"
   if [ "$updated" = "$(jq . "$file")" ]; then
     say "  unchanged $(show "$file")"
   elif [ "$dry" = 1 ]; then
@@ -155,7 +159,15 @@ selected() {
 }
 
 if [ "$action" = install ]; then
-  rules="$(fetch rules/no-overthink.md)"
+  rules_bundle=""
+  for rule_file in $RULE_FILES; do
+    rule="$(fetch "rules/$rule_file")"
+    if [ -n "$rules_bundle" ]; then
+      rules_bundle="$(printf '%s\n\n---\n\n%s' "$rules_bundle" "$rule")"
+    else
+      rules_bundle="$rule"
+    fi
+  done
   skill="$(fetch skills/quick/SKILL.md)"
   # Claude Code extras: user-invoked only, and effort drops to low for that turn.
   claude_skill="$(printf '%s\n' "$skill" | awk 'NR > 1 && /^---$/ && !done { print "disable-model-invocation: true"; print "argument-hint: <request>"; print "effort: low"; done = 1 } { print }')"
@@ -169,13 +181,21 @@ if selected kiro "$HOME/.kiro"; then
   count=$((count + 1))
   say "Kiro (IDE, CLI, Kiro Crew)"
   if [ "$action" = install ]; then
-    put "$HOME/.kiro/steering/no-overthink.md" "$(printf -- '---\ninclusion: always\n---\n%s\n\n%s' "$TAG" "$rules")"
+    # Remove the former global rule so only self-gated model rules remain.
+    unput "$LEGACY_KIRO_RULE"
+    for rule_file in $RULE_FILES; do
+      rule="$(fetch "rules/$rule_file")"
+      put "$HOME/.kiro/steering/no-overthink-$rule_file" "$(printf -- '---\ninclusion: always\n---\n%s\n\n%s' "$TAG" "$rule")"
+    done
     put "$HOME/.kiro/skills/quick/SKILL.md" "$skill"
   else
-    unput "$HOME/.kiro/steering/no-overthink.md"
+    unput "$LEGACY_KIRO_RULE"
+    for rule_file in $RULE_FILES; do
+      unput "$HOME/.kiro/steering/no-overthink-$rule_file"
+    done
     unput "$HOME/.kiro/skills/quick/SKILL.md"
     # Without --agent, clean every agent that an earlier --agent changed.
-    [ -n "$agents" ] || agents="$(grep -lF 'file://~/.kiro/steering/no-overthink.md' "$HOME"/.kiro/agents/*.json 2>/dev/null | sed 's|.*/||; s|\.json$||' | paste -sd, - || true)"
+    [ -n "$agents" ] || agents="$(grep -lE 'file://~/.kiro/steering/no-overthink(\.md|-)' "$HOME"/.kiro/agents/*.json 2>/dev/null | sed 's|.*/||; s|\.json$||' | paste -sd, - || true)"
   fi
   for agent in ${agents//,/ }; do
     patch_agent "$agent"
@@ -186,7 +206,7 @@ if selected claude "$HOME/.claude"; then
   count=$((count + 1))
   say "Claude Code"
   if [ "$action" = install ]; then
-    put_block "$HOME/.claude/CLAUDE.md" "$rules"
+    put_block "$HOME/.claude/CLAUDE.md" "$rules_bundle"
     put "$HOME/.claude/skills/quick/SKILL.md" "$claude_skill"
   else
     unput_block "$HOME/.claude/CLAUDE.md"
@@ -198,7 +218,7 @@ if selected codex "$CODEX_DIR"; then
   count=$((count + 1))
   say "Codex"
   if [ "$action" = install ]; then
-    put_block "$CODEX_DIR/AGENTS.md" "$rules"
+    put_block "$CODEX_DIR/AGENTS.md" "$rules_bundle"
     put "$HOME/.agents/skills/quick/SKILL.md" "$skill"
     if [ -s "$CODEX_DIR/AGENTS.override.md" ]; then
       say "  note: $(show "$CODEX_DIR/AGENTS.override.md") exists, so Codex ignores AGENTS.md until you remove it"
@@ -213,11 +233,21 @@ if selected cursor "$HOME/.cursor"; then
   count=$((count + 1))
   say "Cursor"
   if [ "$action" = install ]; then
-    put "$HOME/.cursor/rules/no-overthink.mdc" "$(printf -- '---\ndescription: Answer and act directly without overthinking\nalwaysApply: true\n---\n%s\n\n%s' "$TAG" "$rules")"
+    # Remove the former global rule so only self-gated model rules remain.
+    unput "$LEGACY_CURSOR_RULE"
+    for rule_file in $RULE_FILES; do
+      stem="${rule_file%.md}"
+      rule="$(fetch "rules/$rule_file")"
+      put "$HOME/.cursor/rules/no-overthink-$stem.mdc" "$(printf -- '---\ndescription: Model-specific no-overthink rule for %s\nalwaysApply: true\n---\n%s\n\n%s' "$stem" "$TAG" "$rule")"
+    done
     put "$HOME/.cursor/skills/quick/SKILL.md" "$skill"
-    say "  note: if Cursor doesn't list the rule, paste rules/no-overthink.md into Settings > Rules > User Rules"
+    say "  note: if Cursor doesn't list these rules, paste the files under rules/ into Settings > Rules > User Rules"
   else
-    unput "$HOME/.cursor/rules/no-overthink.mdc"
+    unput "$LEGACY_CURSOR_RULE"
+    for rule_file in $RULE_FILES; do
+      stem="${rule_file%.md}"
+      unput "$HOME/.cursor/rules/no-overthink-$stem.mdc"
+    done
     unput "$HOME/.cursor/skills/quick/SKILL.md"
   fi
 fi

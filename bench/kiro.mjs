@@ -23,9 +23,25 @@ import { parseArgs } from 'node:util';
 import { tasks } from './tasks.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RULES = (await readFile(path.join(HERE, '../rules/no-overthink.md'), 'utf8')).trim();
-const RULES_SHA = createHash('sha256').update(RULES).digest('hex').slice(0, 12);
-const ENTRIES = ['file://~/.kiro/steering/no-overthink.md', 'skill://~/.kiro/skills/quick/SKILL.md'];
+const RULE_FILES = [
+  'anthropic-claude-opus-5.5.md',
+  'anthropic-claude-fable-5.1.md',
+  'openai-gpt-6.md',
+  'openai-gpt-5.6.md',
+  'openai-gpt-5.5.md',
+];
+function ruleFileFor(model) {
+  const id = model.split('/').at(-1);
+  if (id.startsWith('claude-opus-5.5') || id.startsWith('claude-opus-5-5')) return 'anthropic-claude-opus-5.5.md';
+  if (id.startsWith('claude-fable-5.1') || id.startsWith('claude-fable-5-1')) return 'anthropic-claude-fable-5.1.md';
+  if (id.startsWith('gpt-6')) return 'openai-gpt-6.md';
+  if (id.startsWith('gpt-5.6') || id.startsWith('gpt-5-6')) return 'openai-gpt-5.6.md';
+  if (id.startsWith('gpt-5.5') || id.startsWith('gpt-5-5')) return 'openai-gpt-5.5.md';
+  throw new Error(`No model-specific rule for "${model}"`);
+}
+const RULE_ENTRIES = RULE_FILES.map((file) => `file://~/.kiro/steering/no-overthink-${file}`);
+const ENTRIES = [...RULE_ENTRIES, 'skill://~/.kiro/skills/quick/SKILL.md'];
+const LEGACY_ENTRIES = ['file://~/.kiro/steering/no-overthink.md'];
 const TIMEOUT_MS = 15 * 60 * 1000;
 // The agent gets your environment minus credentials it doesn't need.
 const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/API_KEY|SECRET|TOKEN/i.test(key)));
@@ -43,9 +59,13 @@ const { values: opts } = parseArgs({
   },
 });
 
-const installed = await readFile(path.join(homedir(), '.kiro/steering/no-overthink.md'), 'utf8').catch(() => '');
+const RULE_FILE = ruleFileFor(opts.model);
+const RULES = (await readFile(path.join(HERE, '../rules', RULE_FILE), 'utf8')).trim();
+const RULES_SHA = createHash('sha256').update(RULES).digest('hex').slice(0, 12);
+const installedPath = path.join(homedir(), '.kiro/steering', `no-overthink-${RULE_FILE}`);
+const installed = await readFile(installedPath, 'utf8').catch(() => '');
 if (!installed.includes(RULES)) {
-  console.error('~/.kiro/steering/no-overthink.md is missing or differs from rules/no-overthink.md. Run ./install.sh --only kiro first.');
+  console.error(`${installedPath} is missing or differs from rules/${RULE_FILE}. Run ./install.sh --only kiro first.`);
   process.exit(1);
 }
 const base = JSON.parse(await readFile(path.join(homedir(), '.kiro/agents', `${opts.agent}.json`), 'utf8'));
@@ -61,7 +81,7 @@ const out =
 await mkdir(path.dirname(out), { recursive: true });
 
 function agentFor(arm) {
-  const kept = (base.resources ?? []).filter((entry) => !ENTRIES.includes(entry));
+  const kept = (base.resources ?? []).filter((entry) => !ENTRIES.includes(entry) && !LEGACY_ENTRIES.includes(entry));
   const agent = { ...base, name: 'nobench', resources: arm === 'with' ? [...kept, ...ENTRIES] : kept };
   // Keep tool guards. Drop hooks that write to your own state or terminal, and the shortcut.
   agent.hooks = base.hooks?.preToolUse ? { preToolUse: base.hooks.preToolUse } : undefined;

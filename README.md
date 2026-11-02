@@ -1,10 +1,10 @@
 # no-overthink
 
-Always-on, model-agnostic rules and a `/quick` skill that reduce overthinking in GPT, Claude, and other instruction-following models across Kiro, Kiro Crew, Claude Code, Codex and Cursor.
+Always-on, model-specific rules and a `/quick` skill that reduce overthinking in Kiro, Kiro Crew, Claude Code, Codex and Cursor.
 
-The support policy covers every model in [OpenAI's current GPT catalog](https://developers.openai.com/api/docs/models) and the two preceding stable GPT releases. The canonical rule contains no model IDs or provider syntax, so one file works across model variants. GPT support means the instruction can be loaded; the performance measurements below are currently Claude-only.
+The installer deploys every supported rule together, but keeps each rule in a separate source file. Every file starts with an applicability gate: matching models apply it, while every other model ignores it. OpenAI GPT-6/6.1, GPT-5.6 and GPT-5.5 use the aggressive `strict-openai` profile; Claude Opus 5.5 and Claude Fable 5.1 keep their own Claude-specific profiles.
 
-On the tested Claude models, the rules cut output tokens by 41–57% and time per task by 30–53%. No task that passed without the rules failed with them.
+In the historical benchmark below, the earlier shared Claude rule cut output tokens by 41–57% and time per task by 30–53%. No task that passed without the rule failed with it. The split model-specific files have not yet been re-measured.
 
 ## Install
 
@@ -31,14 +31,14 @@ Then start a new session in each tool.
 
 | Tool | Always-on rules | `/quick` skill |
 | --- | --- | --- |
-| Kiro IDE, Kiro CLI, Kiro Crew | `~/.kiro/steering/no-overthink.md` | `~/.kiro/skills/quick/SKILL.md` |
-| Claude Code | marked block in `~/.claude/CLAUDE.md` | `~/.claude/skills/quick/SKILL.md` |
-| Codex | marked block in `~/.codex/AGENTS.md` | `~/.agents/skills/quick/SKILL.md` |
-| Cursor | `~/.cursor/rules/no-overthink.mdc` | `~/.cursor/skills/quick/SKILL.md` |
+| Kiro IDE, Kiro CLI, Kiro Crew | separate `~/.kiro/steering/no-overthink-<model>.md` files | `~/.kiro/skills/quick/SKILL.md` |
+| Claude Code | one marked block in `~/.claude/CLAUDE.md`, containing every separate rule | `~/.claude/skills/quick/SKILL.md` |
+| Codex | one marked block in `~/.codex/AGENTS.md`, containing every separate rule | `~/.agents/skills/quick/SKILL.md` |
+| Cursor | separate `~/.cursor/rules/no-overthink-<model>.mdc` files | `~/.cursor/skills/quick/SKILL.md` |
 
-Without `--only`, the installer only sets up tools whose config folder exists. It never overwrites a file it didn't create, and it edits `CLAUDE.md` and `AGENTS.md` only between `<!-- no-overthink:start -->` and `<!-- no-overthink:end -->`. Running it again updates the files in place.
+Without `--only`, the installer only sets up tools whose config folder exists. It never overwrites a file it didn't create, and it edits `CLAUDE.md` and `AGENTS.md` only between `<!-- no-overthink:start -->` and `<!-- no-overthink:end -->`. Running it again updates the files in place. Upgrading removes the former global `no-overthink` rule before installing the separate self-gated files.
 
-If Cursor doesn't list the rule under Settings > Rules, paste [`rules/no-overthink.md`](rules/no-overthink.md) into User Rules. Cursor's help page lists `~/.cursor/rules` for local user rules, but older versions ignore that folder.
+If Cursor doesn't list the rules under Settings > Rules, paste every file under [`rules/`](rules) into User Rules. Cursor's help page lists `~/.cursor/rules` for local user rules, but older versions ignore that folder.
 
 ### Kiro CLI custom agents
 
@@ -48,38 +48,46 @@ Kiro CLI custom agents, such as kirobuff's `tech-cofounder`, load `~/.kiro/steer
 ./install.sh --only kiro --agent tech-cofounder
 ```
 
-This appends `file://~/.kiro/steering/no-overthink.md` and `skill://~/.kiro/skills/quick/SKILL.md` to the agent's `resources`. `--uninstall` removes them from every agent that has them.
+This appends all five `file://~/.kiro/steering/no-overthink-<model>.md` resources and `skill://~/.kiro/skills/quick/SKILL.md` to the agent's `resources`. `--uninstall` removes both the current entries and the former global-rule entry from every agent that has them.
 
 Checked with Kiro CLI 2.37.1 and Kiro Crew 0.12.0-rc.4:
 
 - In a workspace that inherits, Kiro CLI still loads the rules once.
-- Kiro Crew already gives custom agents the global steering, so `kirocrew chat --agent tech-cofounder` gets a second copy of the rules: about 445 more input tokens per request.
+- Kiro Crew already gives custom agents the global steering, so `kirocrew chat --agent tech-cofounder` can receive a second copy when `--agent` also lists the files explicitly.
 
 ## Use
 
 - The rules load in every session. Nothing to do.
 - Type `/quick <request>` (Codex: `$quick <request>`) when one request should take the shortest path. In Claude Code the skill also lowers effort to `low` for that turn.
 
-The rules themselves are in [`rules/no-overthink.md`](rules/no-overthink.md): think only when it helps, take the first approach that works, read only what the task needs, batch tool calls, change only what was asked, verify once, and lead the reply with the answer.
+The rules live as separate files under [`rules/`](rules). The installer loads all five; each model applies only the file whose applicability gate names that model family.
 
-## GPT and OpenAI
+## Model-specific rules
 
-The core rule is plain Markdown and does not depend on a particular GPT model ID. The maintained compatibility range is the current stable GPT catalog plus the two preceding stable releases, including their available flagship, chat, reasoning, mini and nano variants when the host supports persistent instructions.
+| Rule | Applies only to | Profile |
+| --- | --- | --- |
+| [`anthropic-claude-opus-5.5.md`](rules/anthropic-claude-opus-5.5.md) | Claude Opus 5.5 family | Claude-specific |
+| [`anthropic-claude-fable-5.1.md`](rules/anthropic-claude-fable-5.1.md) | Claude Fable 5.1 family | Claude-specific |
+| [`openai-gpt-6.md`](rules/openai-gpt-6.md) | OpenAI GPT-6 and GPT-6.1 variants | `strict-openai` |
+| [`openai-gpt-5.6.md`](rules/openai-gpt-5.6.md) | OpenAI GPT-5.6 variants | `strict-openai` |
+| [`openai-gpt-5.5.md`](rules/openai-gpt-5.5.md) | OpenAI GPT-5.5 variants | `strict-openai` |
+
+The OpenAI range follows [OpenAI's current model catalog](https://developers.openai.com/api/docs/models) plus the two preceding stable GPT releases. The strict rules require immediate execution, one chosen solution, no visible deliberation, no scope expansion, one narrow verification, and a hard stop after the result. They do not apply to Claude or unidentified models.
 
 | Surface | Setup |
 | --- | --- |
-| ChatGPT | Paste [`rules/no-overthink.md`](rules/no-overthink.md) into [Custom Instructions](https://help.openai.com/en/articles/8096356-chatgpt-custom-instructions-faq) |
-| Codex | Run `./install.sh --only codex`; Codex loads the marked block from `~/.codex/AGENTS.md` |
-| OpenAI Responses API | Pass the contents of [`rules/no-overthink.md`](rules/no-overthink.md) through the request's `instructions` field |
-| Other GPT hosts | Add the rule through the host's persistent system, developer or custom-instruction setting |
+| ChatGPT | Paste the matching `openai-*.md` file into [Custom Instructions](https://help.openai.com/en/articles/8096356-chatgpt-custom-instructions-faq); for automatic model switching, paste all three and let the gates select |
+| Codex | Run `./install.sh --only codex`; the marked `AGENTS.md` block contains every separate rule |
+| OpenAI Responses API | Pass only the file matching the request's model through the `instructions` field |
+| Other multi-model hosts | Install all files; the active model applies its matching file and ignores the rest |
 
-The rule steers visible responses, tool use and task scope. It cannot disable a model's private reasoning. When the API model supports it, use a lower [`reasoning.effort`](https://developers.openai.com/api/docs/guides/reasoning?api-mode=responses) for a harder limit on reasoning cost and latency.
+If a host does not identify the active model to the model itself, every applicability gate instructs it to ignore the rule rather than risk applying another model's profile. The rules steer visible responses, tool use and task scope; they cannot override higher-priority instructions or disable private reasoning. Where supported, a lower [`reasoning.effort`](https://developers.openai.com/api/docs/guides/reasoning?api-mode=responses) provides a separate limit on reasoning cost and latency.
 
 ## Precedence
 
-The first line tells the model that no-overthink overrides every other instruction, rule, steering file and style guide, with one exception: for destructive actions, data loss, security, secrets and money, the stricter instruction wins. Each host's instruction hierarchy still applies: system, developer and safety policies outrank user or custom instructions, so the override works among the rules you control.
+Every rule begins with a model-family gate. A nonmatching or unidentified model ignores the rest of that file. For a matching model, no-overthink takes priority over other user-controlled rules at the same instruction level. Each host's system, developer and safety hierarchy still wins, and stricter safety requirements always apply.
 
-To avoid fighting rule sets you already have, the rules stay out of two areas those usually own: they don't say when to add tests, and they don't say which checks to run, only to run each one once. A team guardrail that says "run the build before reporting done" or a testing policy that says "add a few tests for money and permissions logic" still applies in full.
+The strict OpenAI files block unsolicited tests, cleanup and refactors. They do not suppress checks explicitly required by the request or by a higher-priority project policy. Their verification rule removes redundant reruns after the required narrow check has passed.
 
 ## Lower effort as well
 
@@ -102,10 +110,10 @@ On the same 7 tasks without the rules, Opus 5.5 at `max` effort produced 5,001 o
 - **Harness:** [`bench/run.mjs`](bench/run.mjs) is a small coding-agent loop on the Anthropic Messages API with adaptive thinking and five tools: list, read, write and edit files, and bash.
 - **Arms:**
   - *Without*: no rules, default effort.
-  - *With rules*: [`rules/no-overthink.md`](rules/no-overthink.md) added to the first user message. Claude Code and Kiro add global instructions the same way.
+  - *With rules*: the matching Claude model file under [`rules/`](rules) added to the first user message. Installed tools load every file, but only the matching model gate applies.
   - *With rules + /quick*: also the skill text, at effort `low`. This matches `/quick` in Claude Code.
 - **Tasks:** 3 questions (undo a git commit, compare floats, explain a retry helper) and 5 code changes (fix a failing test, fix a crash, add a function, rename across files, fix an LRU cache). Every run starts from a fresh copy of its fixture in [`bench/fixtures`](bench/fixtures). A run passes when its check in [`bench/tasks.mjs`](bench/tasks.mjs) passes: the original tests, a hidden check, or a pattern in the answer.
-- **When:** 2 November 2026, models `claude-opus-5-5` and `claude-fable-5-1`, rules version `541dad574ed8`. Raw runs are in [`bench/results`](bench/results). The current rules (`9a07e38a94b0`) add the override line, use firmer wording throughout, and drop the sentence on adding tests; these edits haven't been re-measured.
+- **When:** 2 November 2026, models `claude-opus-5-5` and `claude-fable-5-1`, historical shared-rules version `541dad574ed8`. Raw runs are in [`bench/results`](bench/results). The new model-specific files have not been re-measured; future runs record the hash of the rule selected for each model.
 
 ### Default effort
 
@@ -217,7 +225,7 @@ The agent runs code it writes on your machine, inside a temp copy of each fixtur
 
 | Path | Contents |
 | --- | --- |
-| [`rules/no-overthink.md`](rules/no-overthink.md) | The rules, one source for every tool |
+| [`rules/`](rules) | Separate, self-gated rules for each supported model family |
 | [`skills/quick/SKILL.md`](skills/quick/SKILL.md) | The `/quick` skill |
 | [`install.sh`](install.sh) | Installer and uninstaller |
 | [`bench/`](bench) | API harness, Kiro CLI harness ([`kiro.mjs`](bench/kiro.mjs)), tasks, fixtures, raw results, report script |
