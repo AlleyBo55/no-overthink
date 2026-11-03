@@ -24,7 +24,13 @@ In a small benchmark on Claude Opus 5.5 and Claude Fable 5.1, the rules cut outp
 Pick your tool and paste one line into a terminal. Needs `bash` and `curl`.
 
 - **macOS, Linux:** use the built-in Terminal. `curl` ships by default on macOS and most Linux distros (on minimal setups install it with your package manager, e.g. `sudo apt install curl`).
-- **Windows:** the installer is a bash script, so run it from **Git Bash** (bundled with [Git for Windows](https://git-scm.com/download/win)) or **WSL** (`wsl --install`). PowerShell and `cmd.exe` can't run it directly. Git Bash and WSL both include `bash` and `curl`.
+- **Windows:** use the native PowerShell installer `install.ps1` (PowerShell 7+). Paste the line for your tool into PowerShell:
+
+  ```powershell
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AlleyBo55/no-overthink/main/install.ps1)))
+  ```
+
+  Pass tool and options the same way, e.g. `... -Only kiro`, `-Agent tech-cofounder`, `-DryRun`, `-Uninstall`. If you prefer the bash installer, run `install.sh` from **Git Bash** (bundled with [Git for Windows](https://git-scm.com/download/win)) or **WSL** (`wsl --install`); both include `bash` and `curl`.
 
 **Every supported tool found on this machine**
 
@@ -385,7 +391,8 @@ The README images are drawn from the same results by `node assets/make-visuals.m
 | --- | --- |
 | [`rules/`](rules) | Separate, self-gated rules for each supported model family |
 | [`skills/quick/SKILL.md`](skills/quick/SKILL.md) | The `/quick` skill |
-| [`install.sh`](install.sh) | Installer and uninstaller |
+| [`install.sh`](install.sh) | Installer and uninstaller (macOS, Linux, and Windows via Git Bash or WSL) |
+| [`install.ps1`](install.ps1) | Native PowerShell 7+ installer and uninstaller for Windows |
 | [`bench/`](bench) | API harness, Kiro CLI harness ([`kiro.mjs`](bench/kiro.mjs)), tasks, fixtures, raw results, report script |
 | [`assets/`](assets) | README images, the script that draws them, and a 1280×640 social preview |
 
