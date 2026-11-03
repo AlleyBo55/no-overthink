@@ -89,11 +89,13 @@ Both replies are copied from [`bench/results`](bench/results) and both pass the 
 With the rules loaded, the agent:
 
 - starts with the answer or the first useful action, with no preamble or plan narration
+- answers at the length the question needs, without background or caveats you didn't ask for
 - takes the first approach that works instead of comparing options you didn't ask for
 - reads only what the task needs and doesn't re-read files it already has
 - runs independent tool calls together
 - changes only what you asked for and names other problems in one line
-- verifies once, and stops after two failed attempts to report the blocker
+- edits with the edit tool instead of `sed -i` one-liners, which fail differently on macOS and Linux and cost a retry turn
+- verifies once with an existing test or command rather than a new script, and stops after two failed attempts to report the blocker
 - ends with the result, not a recap or an offer to do more
 
 Safety comes first. Each rule yields to the host's system instructions and to stricter rules about destructive actions, data loss, security, secrets and money.
@@ -120,7 +122,7 @@ Each rule file opens with a gate that names one model family. The matching model
 | Fable 5.1, default | 750 → 354 (−53%) | 12.3 → 8.0 s (−35%) | 11/11 → 11/11 |
 | Opus 5.5, max | 5,001 → 2,156 (−57%) | 48.3 → 22.6 s (−53%) | 6/7 → 6/7 |
 
-8 small tasks, 1–2 runs each, measured with an earlier single-file version of the rules; the current stricter Claude files haven't been re-measured. GPT-5.6 Sol in Kiro CLI passed 8/8 both ways, with time −23%, tool calls −31% and credits −8%, from one run per task ([details](#gpt-56-sol-benchmark)). Full Claude tables and limits are in [Historical Claude measurements](#historical-claude-measurements).
+8 small tasks, 1–2 runs each, measured with an earlier single-file version of the rules; the current stricter files, including the three rules added from the traces below, haven't been re-measured. GPT-5.6 Sol in Kiro CLI passed 8/8 both ways, with time −23%, tool calls −31% and credits −8%, from one run per task ([details](#gpt-56-sol-benchmark)). Full Claude tables and limits are in [Historical Claude measurements](#historical-claude-measurements).
 
 ## FAQ
 
@@ -146,7 +148,7 @@ Only the files listed in [What gets installed](#what-gets-installed). It never o
 
 ### Does it cost extra tokens?
 
-Yes, on input. The five rule files add about 2,800 input tokens to each request (estimated at 4 bytes per token). Most tools cache that prefix after the first request, so it's billed at the cached rate. The benchmark loaded a single rule of about 445 tokens, so this overhead wasn't part of it.
+Yes, on input. The five rule files add about 3,100 input tokens to each request (estimated at 4 bytes per token). Most tools cache that prefix after the first request, so it's billed at the cached rate. The benchmark loaded a single rule of about 445 tokens, so this overhead wasn't part of it.
 
 ## For AI assistants
 
@@ -363,11 +365,18 @@ The `add-fn` run failed in both arms for the same reason: each run added a `slug
 
 </details>
 
+### What the traces showed
+
+Thinking tokens were already near zero with the rules on, so the remaining time went to two places. The current rules add three lines aimed at them; they are unmeasured until the next run.
+
+- **Answer length.** `qa-float` replies ran 1,000–1,500 characters with the rules on: a correct answer, then a money-and-display aside nobody asked for. At roughly 60–100 output tokens per second, that aside is most of the task's 5–7 s. New rule: answer at the length the question needs.
+- **Wasted turns.** Both models hit the same failure on `rename`: GNU-style `sed -i` fails on macOS, so each spent a turn retrying with `sed -i ''` or `perl -pi`. Fable's `rename` took 13.6 s against Opus's 8.6 s mostly for this reason. New rule: edit with the edit tool, not `sed -i`. Fable also spent a turn on `add-fn` writing a one-off node script to verify a change the existing tests already covered (14.5 s against Opus's 6.6 s). New rule: verify with an existing test or command.
+
 ### Limits
 
 - **Small sample.** Each arm has 1 run per code task and 2 per question, or 1 per task at max effort. The run stopped before the planned 3 repetitions because the API account ran out of credit. Treat the percentages as direction and size, not precise values.
 - **A harness, not the tools themselves.** Claude Code, Kiro, Cursor and Antigravity send their own long system prompts, and some of those already ask for brevity, so the savings inside them may be smaller.
-- **No prompt caching.** The benchmark's single rule added about 445 input tokens to every request, which is why input tokens rise for Opus at default effort. The current installer loads all five model files, about 2,800 input tokens per request. Real tools cache that prefix, and cached input costs about a tenth of the list price.
+- **No prompt caching.** The benchmark's single rule added about 445 input tokens to every request, which is why input tokens rise for Opus at default effort. The current installer loads all five model files, about 3,100 input tokens per request. Real tools cache that prefix, and cached input costs about a tenth of the list price.
 - **Small tasks only.** Pass rates held on these tasks. Long multistep work wasn't measured. If quality drops on hard work, keep the rules and use `/quick` less, or raise effort for that session.
 - **One scoring fix.** Two correct `explain` answers wrote `baseMs * 2^attempt` instead of "exponential" and failed the first version of the check. The check now accepts that, and [`bench/report.mjs`](bench/report.mjs) re-scores stored answers with the current checks.
 
