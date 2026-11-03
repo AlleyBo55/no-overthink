@@ -21,7 +21,10 @@ In a small benchmark on Claude Opus 5.5 and Claude Fable 5.1, the rules cut outp
 
 ## Install in one step
 
-Pick your tool and paste one line into a terminal. Needs `bash` and `curl` (macOS or Linux).
+Pick your tool and paste one line into a terminal. Needs `bash` and `curl`.
+
+- **macOS, Linux:** use the built-in Terminal. `curl` ships by default on macOS and most Linux distros (on minimal setups install it with your package manager, e.g. `sudo apt install curl`).
+- **Windows:** the installer is a bash script, so run it from **Git Bash** (bundled with [Git for Windows](https://git-scm.com/download/win)) or **WSL** (`wsl --install`). PowerShell and `cmd.exe` can't run it directly. Git Bash and WSL both include `bash` and `curl`.
 
 **Every supported tool found on this machine**
 
